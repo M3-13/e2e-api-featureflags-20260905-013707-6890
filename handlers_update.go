@@ -14,14 +14,14 @@ type flagUpdate struct {
 func handleUpdateFlag(w http.ResponseWriter, r *http.Request, s *Store) {
 	key := r.PathValue("key")
 
-	existing, ok := s.Get(key)
-	if !ok {
-		writeError(w, http.StatusNotFound, "flag not found")
+	var update flagUpdate
+	if err := decodeJSONBody(w, r, &update); err != nil {
 		return
 	}
 
-	var update flagUpdate
-	if err := decodeJSONBody(w, r, &update); err != nil {
+	existing, ok := s.Get(key)
+	if !ok {
+		writeError(w, http.StatusNotFound, "flag not found")
 		return
 	}
 

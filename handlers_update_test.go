@@ -84,6 +84,27 @@ func TestUpdateFlagRolloutPercentOutOfRangeReturns400(t *testing.T) {
 	}
 }
 
+func TestUpdateFlagUnknownKeyWrongContentTypeReturns415(t *testing.T) {
+	_, mux := newUpdateServer(t)
+
+	rec := doUpdate(t, mux, "nope", `{"enabled":true}`, "text/plain")
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415 for unknown key with wrong content type, got %d", rec.Code)
+	}
+}
+
+func TestUpdateFlagUnknownKeyLargeBodyReturns413(t *testing.T) {
+	_, mux := newUpdateServer(t)
+
+	large := `{"enabled":true,"description":"` + strings.Repeat("a", maxBodyBytes+1024) + `"}`
+	rec := doUpdate(t, mux, "nope", large, "application/json")
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for unknown key with large body, got %d", rec.Code)
+	}
+}
+
 func TestUpdateFlagWrongContentTypeReturns415(t *testing.T) {
 	s, mux := newUpdateServer(t)
 	_ = s.Create(Flag{Key: "feature1"})
