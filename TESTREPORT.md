@@ -1,12 +1,24 @@
 VERDICT: BUGS_FOUND
 
-## Fehler 1
+## Fehleranalyse
 
-- **Titel:** Evaluate-Endpunkt liefert 404 über den echten Router, obwohl das Flag existiert
-- **Symptom:** `GET /flags/{key}/evaluate?user=...` ist über den in `newRouter` bzw. `main.go` registrierten ServeMux nicht nutzbar. Der Handler antwortet mit 404, obwohl der angefragte Flag-Key zuvor im Store angelegt wurde. Damit ist AC-07 (deterministische Rollout-Entscheidung über den HTTP-Endpunkt) im realen Routing-Kontext gebrochen.
-- **Repro:** `go test ./...` → Subtest `TestRoutesAreReachable/evaluate_flag`
-- **Evidence:**
-  - `handlers_crud_test.go:55: route GET /flags/some.key/evaluate?user=u1 returned 404: not registered`
-  - Logzeile des Testlaufs: `2026/09/05 02:21:49 GET /flags/some.key/evaluate 404`
-- **Suspected file(s):** `handlers_evaluate.go` — der Handler extrahiert den Key manuell aus `r.URL.Path` (`strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")`), statt das vom ServeMux gesetzte `r.PathValue("key")` zu verwenden. Dadurch wird der Key im realen Router-Kontext nicht zuverlässig aufgelöst.
-- **Severity:** high
+Der Native-Testlauf (`go test ./...`) schlägt mit **exit 1** fehl. `go build ./...` war grün, es handelt sich also nicht um einen Kompilierfehler, sondern um einen echten Laufzeit-/Routingfehler.
+
+### Bug 1: Route `GET /flags/{key}/evaluate` ist nicht erreichbar und liefert 404
+
+- **Titel**: Evaluate-Route liefert 404 statt des Evaluate-Handlers
+- **Symptom**: Der in AC-07 geforderte Endpunkt zur Rollout-Entscheidung ist über den registrierten HTTP-Router nicht erreichbar. Ein Request auf `/flags/some.key/evaluate?user=u1` endet in 404, obwohl der Handler selbst existiert und dessen Direkttests bestanden haben. Damit kann kein Client die Feature-Rollout-Entscheidung abrufen – die Kernfunktion „deterministische Rollout-Entscheidung pro Nutzer“ fehlt zur Laufzeit.
+- **Repro**:
+  1. `go test ./...`
+  2. Oder Server starten und `GET /flags/some.key/evaluate?user=u1` absetzen.
+- **Evidence**:
+  - Fehlende Testzeile:
+    ```
+    handlers_crud_test.go:55: route GET /flags/some.key/evaluate?user=u1 returned 404: not registered
+    ```
+  - Server-Logzeile:
+    ```
+    2026/09/05 02:28:23 GET /flags/some.key/evaluate 404
+    ```
+- **Suspected file(s)**: `main.go` (Routerdefinition). Das registrierte Muster `mux.Handle("GET /flags/{key}/evaluate", ...)` matcht offenbar nicht; ggf. auch `go.mod`, falls die deklarierte Go-Version unter 1.22 liegt und `http.ServeMux` die Methoden-/Wildcard-Muster (`{key}`) nicht auswertet. Der Handler `handlers_evaluate.go` selbst ist unschuldig – dessen Direkttests sind grün; der Fehler liegt in der Verdrahtung der Route.
+- **Severity**: high
