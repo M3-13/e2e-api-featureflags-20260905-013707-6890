@@ -3,10 +3,15 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 func handleEvaluateFlag(w http.ResponseWriter, r *http.Request, s *Store) {
-	key := r.PathValue("key")
+	segments := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	key := ""
+	if len(segments) == 3 && segments[0] == "flags" && segments[2] == "evaluate" {
+		key = segments[1]
+	}
 
 	user := r.URL.Query().Get("user")
 	if user == "" {
